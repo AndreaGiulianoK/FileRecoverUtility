@@ -95,6 +95,24 @@ def _build_cmd(source: Path, image_path: Path, map_path: Path, extra_args: list[
     return base
 
 
+async def kill_ddrescue() -> None:
+    """Termina tutti i processi ddrescue in esecuzione (SIGTERM, poi SIGKILL)."""
+    import signal
+    kill_cmd = await asyncio.create_subprocess_exec(
+        "sudo", "pkill", "-TERM", "-x", "ddrescue",
+        stdout=asyncio.subprocess.DEVNULL,
+        stderr=asyncio.subprocess.DEVNULL,
+    )
+    await kill_cmd.wait()
+    # piccola attesa, poi SIGKILL se ancora in piedi
+    await asyncio.sleep(2)
+    await asyncio.create_subprocess_exec(
+        "sudo", "pkill", "-KILL", "-x", "ddrescue",
+        stdout=asyncio.subprocess.DEVNULL,
+        stderr=asyncio.subprocess.DEVNULL,
+    )
+
+
 async def run(
     source: Path,
     image_path: Path,
@@ -108,8 +126,10 @@ async def run(
     proc = await asyncio.create_subprocess_exec(
         *cmd,
         stdin=asyncio.subprocess.DEVNULL,
-        stdout=asyncio.subprocess.PIPE,   # cattura stdout oltre a stderr
-        stderr=asyncio.subprocess.STDOUT, # unisci stderr su stdout
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.STDOUT,
+        # nuovo process group: possiamo killare l'intero gruppo con killpg
+        start_new_session=True,
     )
 
     progress = ImagingProgress()

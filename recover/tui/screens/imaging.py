@@ -42,6 +42,7 @@ class ImagingScreen(Screen):
         self._cfg = app_cfg
         self._aborted = False
         self._total_bytes = 0
+        self._imaging_running = False
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -122,6 +123,7 @@ class ImagingScreen(Screen):
         assert self._session.image_path is not None
         assert self._session.map_path is not None
 
+        self._imaging_running = True
         last_info = ""
         async for prog in imaging_mod.run(
             Path(self._session.device.path),
@@ -163,6 +165,7 @@ class ImagingScreen(Screen):
                 f"Elapsed:    {prog.elapsed or '—'}"
             )
 
+        self._imaging_running = False
         if not self._aborted:
             log.write("")
             log.write("[bold green]Imaging completato.[/]")
@@ -174,8 +177,20 @@ class ImagingScreen(Screen):
 
     def action_abort(self) -> None:
         self._aborted = True
-        self.notify("Imaging interrotto.", severity="warning")
+        self.notify("Imaging interrotto — arresto ddrescue in corso…", severity="warning")
+        self._kill_and_exit()
+
+    @work(exclusive=False)
+    async def _kill_and_exit(self) -> None:
+        if self._imaging_running:
+            await imaging_mod.kill_ddrescue()
         self.app.pop_screen()
+
+    def on_unmount(self) -> None:
+        """Sicurezza: se la schermata viene rimossa mentre ddrescue gira, lo termina."""
+        if self._imaging_running:
+            import asyncio
+            asyncio.ensure_future(imaging_mod.kill_ddrescue())
 
 
 def _human(n: int) -> str:
