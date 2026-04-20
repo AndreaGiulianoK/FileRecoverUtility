@@ -13,6 +13,7 @@ class DetectScreen(Screen):
     BINDINGS = [
         Binding("escape", "app.pop_screen", "Indietro"),
         Binding("r", "refresh", "Ricarica"),
+        Binding("m", "manual_image", "Immagine esistente"),
     ]
 
     def compose(self) -> ComposeResult:
@@ -48,6 +49,11 @@ class DetectScreen(Screen):
 
     def action_refresh(self) -> None:
         self._load_devices()
+
+    def action_manual_image(self) -> None:
+        from recover.utils import config as cfg_mod
+        from recover.tui.screens.resume import ResumeScreen
+        self.app.push_screen(ResumeScreen(cfg_mod.load()))
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         if not self._devices:

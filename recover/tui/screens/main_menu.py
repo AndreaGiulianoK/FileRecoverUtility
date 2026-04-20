@@ -33,8 +33,12 @@ class MainMenuScreen(Screen):
             case "new":
                 from recover.tui.screens.detect import DetectScreen
                 self.app.push_screen(DetectScreen())
+            case "resume":
+                from recover.utils import config as cfg_mod
+                from recover.tui.screens.resume import ResumeScreen
+                self.app.push_screen(ResumeScreen(cfg_mod.load()))
             case "deps":
                 from recover.tui.screens.deps_check import DepsCheckScreen
                 self.app.push_screen(DepsCheckScreen())
-            case "resume" | "config":
+            case "config":
                 self.notify("Non ancora implementato", severity="warning")

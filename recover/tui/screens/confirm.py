@@ -4,16 +4,12 @@ from __future__ import annotations
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.screen import Screen
-from textual.widgets import Button, Footer, Header, Label, ListItem, ListView, Static
+from textual.widgets import Button, Footer, Header, Static
+from textual.containers import ScrollableContainer
 
 from recover.utils.fs import BlockDevice, unmount_device
 from recover.core.session import Session
-
-_MODES = [
-    ("A", "Recupero file cancellati  (filesystem leggibile)"),
-    ("B", "Recupero filesystem corrotto  (carving raw)"),
-    ("C", "Solo imaging  (crea immagine .img e ferma)"),
-]
+from recover.tui.widgets.mode_selector import ModeSelector
 
 
 class ConfirmScreen(Screen):
@@ -33,11 +29,9 @@ class ConfirmScreen(Screen):
                 id="mount-warning",
             )
             yield Button("Smonta ora", id="btn-unmount", variant="warning")
-        yield Static("Scegli modalità di recupero:", classes="screen-title", id="mode-title")
-        yield ListView(
-            *[ListItem(Label(f"  {k})  {v}"), id=f"mode_{k}") for k, v in _MODES],
-            id="modes",
-        )
+        yield Static("Scegli modalità di recupero:", classes="screen-title")
+        with ScrollableContainer():
+            yield ModeSelector(id="mode-sel")
         yield Footer()
 
     def _device_info(self) -> str:
@@ -52,13 +46,8 @@ class ConfirmScreen(Screen):
         )
 
     def on_mount(self) -> None:
-        self._update_mode_availability()
-
-    def _update_mode_availability(self) -> None:
-        lv: ListView = self.query_one("#modes")
-        lv.disabled = self._dev.is_mounted
-        if not self._dev.is_mounted:
-            lv.focus()
+        sel = self.query_one(ModeSelector)
+        sel.disabled = self._dev.is_mounted
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id != "btn-unmount":
@@ -66,24 +55,17 @@ class ConfirmScreen(Screen):
         btn: Button = self.query_one("#btn-unmount")
         btn.disabled = True
         btn.label = "Smonto…"
-
         ok, err = unmount_device(self._dev)
         if ok:
             self._dev = self._dev.__class__(
-                name=self._dev.name,
-                path=self._dev.path,
-                size=self._dev.size,
-                fstype=self._dev.fstype,
-                label=self._dev.label,
-                mountpoint="",
-                removable=self._dev.removable,
+                name=self._dev.name, path=self._dev.path, size=self._dev.size,
+                fstype=self._dev.fstype, label=self._dev.label,
+                mountpoint="", removable=self._dev.removable,
             )
             self.query_one("#device-info", Static).update(self._device_info())
-            self.query_one("#mount-warning", Static).update(
-                "[green]Dispositivo smontato correttamente.[/green]"
-            )
+            self.query_one("#mount-warning", Static).update("[green]Dispositivo smontato.[/green]")
             btn.remove()
-            self._update_mode_availability()
+            self.query_one(ModeSelector).disabled = False
             self.notify("Dispositivo smontato.", severity="information")
         else:
             self.query_one("#mount-warning", Static).update(
@@ -93,23 +75,17 @@ class ConfirmScreen(Screen):
             btn.label = "Riprova smonto"
             self.notify(f"Errore smonto: {err}", severity="error")
 
-    def on_list_view_selected(self, event: ListView.Selected) -> None:
+    def on_mode_selector_mode_selected(self, event: ModeSelector.ModeSelected) -> None:
         if self._dev.is_mounted:
             self.notify("Smonta il dispositivo prima di procedere.", severity="warning")
             return
-        mode = event.item.id.replace("mode_", "") if event.item.id else ""
-        if not mode:
-            return
-
         from datetime import datetime
         from recover.utils import config as cfg_mod
         cfg = cfg_mod.load()
-
         session = Session(
             device=self._dev,
-            mode=mode,
+            mode=event.mode,
             timestamp=datetime.now().strftime("%Y-%m-%d_%H%M%S"),
         )
-
         from recover.tui.screens.imaging import ImagingScreen
         self.app.push_screen(ImagingScreen(session, cfg))
