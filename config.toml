@@ -1,0 +1,33 @@
+[general]
+output_dir = "~/RECOVER"
+log_level = "INFO"
+lang = "it"
+
+[recovery]
+deduplication = true
+rename_with_exif = true
+fallback_name = "recovered"
+create_thumbnail = true
+thumbnail_size = [256, 256]
+
+[imaging]
+ddrescue_extra_args = ""
+image_dir = "~/RECOVER/dsks"
+
+[carving]
+photorec_extra_args = ""
+target_formats = [
+  "jpg", "jpeg", "png", "raw", "cr2", "cr3", "nef", "arw",
+  "heic", "heif", "tiff",
+  "mp4", "mov", "avi", "mkv", "mts", "m2ts"
+]
+include_all_formats = false
+
+[filesystems]
+supported = ["fat", "exfat"]
+
+[output]
+subdir_images = "images"
+subdir_videos = "videos"
+subdir_others = "others"
+subdir_duplicates = "duplicates"

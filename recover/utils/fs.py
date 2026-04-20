@@ -43,18 +43,29 @@ def list_removable() -> list[BlockDevice]:
             rm = str(node.get("rm", "0")) == "1"
             tran = (node.get("tran") or parent_tran or "").lower()
             is_external = rm or tran == "usb"
-            if is_external:
-                devices.append(BlockDevice(
-                    name=node.get("name", ""),
-                    path=node.get("path", f"/dev/{node.get('name', '')}"),
-                    size=node.get("size", "?"),
-                    fstype=node.get("fstype") or "",
-                    label=node.get("label") or "",
-                    mountpoint=node.get("mountpoint") or "",
-                    removable=True,
-                ))
             children = node.get("children") or []
-            _walk(children, tran)
+
+            if is_external:
+                if children:
+                    # disco con partizioni: aggiungi solo le partizioni, non il disco padre
+                    _walk(children, tran)
+                else:
+                    # foglia: partizione o disco non partizionato
+                    size = node.get("size") or "0B"
+                    if size.startswith("0"):
+                        # slot lettore vuoto, nessun media inserito
+                        continue
+                    devices.append(BlockDevice(
+                        name=node.get("name", ""),
+                        path=node.get("path", f"/dev/{node.get('name', '')}"),
+                        size=size,
+                        fstype=node.get("fstype") or "",
+                        label=node.get("label") or "",
+                        mountpoint=node.get("mountpoint") or "",
+                        removable=True,
+                    ))
+            else:
+                _walk(children, tran)
 
     _walk(data.get("blockdevices", []))
     return devices
