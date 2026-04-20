@@ -52,7 +52,7 @@ class AnalyzeScreen(Screen):
             self.app.pop_screen()
             self.app.pop_screen()
             return
-        if event.button.id != "btn-launch":
+        if event.button.id not in ("btn-launch", "btn-retry"):
             return
         raw = self._raw_dir()
         raw.mkdir(parents=True, exist_ok=True)
@@ -71,5 +71,5 @@ class AnalyzeScreen(Screen):
             self.app.switch_screen(OrganizeScreen(self._session, self._cfg))
         else:
             self.notify("Nessun file trovato nella cartella raw.", severity="warning")
-            self.mount(Button("Riprova testdisk", id="btn-launch", variant="warning"))
+            self.mount(Button("Riprova testdisk", id="btn-retry", variant="warning"))
             self.mount(Button("Annulla — torna al menu", id="btn-cancel", variant="error"))

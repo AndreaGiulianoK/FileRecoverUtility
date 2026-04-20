@@ -9,7 +9,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import ScrollableContainer, Vertical
 from textual.screen import Screen
-from textual.widgets import Button, DataTable, Footer, Header, Input, Label, Static
+from textual.widgets import DataTable, Footer, Header, Input, Label, Static
 
 from recover.core.session import Session
 from recover.tui.widgets.mode_selector import ModeSelector
@@ -74,13 +74,6 @@ class ResumeScreen(Screen):
                 "[yellow]Nessuna immagine trovata in ~/RECOVER/dsks.[/yellow]\n"
                 "Usa il campo manuale per indicare il percorso."
             )
-
-        self._update_mode_buttons()
-
-    def _update_mode_buttons(self) -> None:
-        for mid in ("A", "B"):
-            btn = self.query_one(f"#mode-{mid}", Button)
-            btn.variant = "primary" if mid == self._mode else "default"
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         if self._images and event.cursor_row < len(self._images):
