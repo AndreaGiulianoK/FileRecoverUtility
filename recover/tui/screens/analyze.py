@@ -10,6 +10,8 @@ from textual.binding import Binding
 from textual.screen import Screen
 from textual.widgets import Button, Footer, Header, Static
 
+
+
 from recover.core.session import Session
 
 
@@ -45,6 +47,11 @@ class AnalyzeScreen(Screen):
         return self._session.session_dir / "raw_testdisk"
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "btn-cancel":
+            self.app.pop_screen()
+            self.app.pop_screen()
+            self.app.pop_screen()
+            return
         if event.button.id != "btn-launch":
             return
         raw = self._raw_dir()
@@ -59,12 +66,10 @@ class AnalyzeScreen(Screen):
         files = list(raw.rglob("*"))
         recovered = [f for f in files if f.is_file()]
         if recovered:
-            self.notify(f"{len(recovered)} file trovati. Procedo con organizzazione.", severity="information")
+            self.notify(f"{len(recovered)} file trovati.", severity="information")
             from recover.tui.screens.organize import OrganizeScreen
             self.app.switch_screen(OrganizeScreen(self._session, self._cfg))
         else:
-            self.notify(
-                "Nessun file trovato nella cartella raw. "
-                "Verifica di aver copiato i file in testdisk.",
-                severity="warning",
-            )
+            self.notify("Nessun file trovato nella cartella raw.", severity="warning")
+            self.mount(Button("Riprova testdisk", id="btn-launch", variant="warning"))
+            self.mount(Button("Annulla — torna al menu", id="btn-cancel", variant="error"))

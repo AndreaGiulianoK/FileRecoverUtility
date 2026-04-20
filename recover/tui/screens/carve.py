@@ -45,6 +45,11 @@ class CarveScreen(Screen):
         return self._session.session_dir / "raw_photorec"
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "btn-cancel":
+            self.app.pop_screen()
+            self.app.pop_screen()
+            self.app.pop_screen()
+            return
         if event.button.id != "btn-launch":
             return
         raw = self._raw_dir()
@@ -57,11 +62,10 @@ class CarveScreen(Screen):
 
         files = [f for f in raw.rglob("*") if f.is_file()]
         if files:
-            self.notify(f"{len(files)} file trovati. Procedo con organizzazione.", severity="information")
+            self.notify(f"{len(files)} file trovati.", severity="information")
             from recover.tui.screens.organize import OrganizeScreen
             self.app.switch_screen(OrganizeScreen(self._session, self._cfg))
         else:
-            self.notify(
-                "Nessun file trovato. Verifica la cartella di output scelta in photorec.",
-                severity="warning",
-            )
+            self.notify("Nessun file trovato. Verifica la cartella di output in photorec.", severity="warning")
+            self.mount(Button("Riprova photorec", id="btn-launch", variant="warning"))
+            self.mount(Button("Annulla — torna al menu", id="btn-cancel", variant="error"))

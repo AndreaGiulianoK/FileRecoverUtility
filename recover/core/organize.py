@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import shutil
+import threading
 from pathlib import Path
 from typing import Any, Callable, Iterator
 
@@ -49,6 +50,7 @@ def run(
     session_dir: Path,
     cfg: dict[str, Any],
     progress_cb: Callable[[int, int, str], None] | None = None,
+    abort: threading.Event | None = None,
 ) -> Iterator[RecoveredFile]:
     rec_cfg = cfg.get("recovery", {})
     do_dedup = rec_cfg.get("deduplication", True)
@@ -74,6 +76,8 @@ def run(
     index = 0
 
     for index, src in enumerate(all_files):
+        if abort and abort.is_set():
+            return
         if progress_cb:
             progress_cb(index, len(all_files), src.name)
 
