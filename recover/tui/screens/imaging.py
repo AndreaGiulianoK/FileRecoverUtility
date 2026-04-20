@@ -1,4 +1,4 @@
-"""Schermata fase IMAGE — ddrescue con barra progresso."""
+"""Schermata fase IMAGE — ddrescue con barra progresso e log live."""
 from __future__ import annotations
 
 from datetime import datetime
@@ -8,8 +8,9 @@ from typing import Any
 from textual import work
 from textual.app import ComposeResult
 from textual.binding import Binding
+from textual.containers import Vertical
 from textual.screen import Screen
-from textual.widgets import Footer, Header, ProgressBar, RichLog, Static
+from textual.widgets import Footer, Header, Label, ProgressBar, RichLog, Static
 
 from recover.core import imaging as imaging_mod
 from recover.core.session import Session
@@ -19,6 +20,21 @@ from recover.utils.fs import session_dir
 
 class ImagingScreen(Screen):
     BINDINGS = [Binding("escape", "abort", "Interrompi", show=True)]
+
+    DEFAULT_CSS = """
+    #stats-box {
+        height: auto;
+        border: solid $panel;
+        margin: 0 1;
+        padding: 0 1;
+    }
+    #stat-rescued { color: $success; }
+    #stat-errors  { color: $error; }
+    #stat-rate    { color: $accent; }
+    #stat-elapsed { color: $text-muted; }
+    #progress     { margin: 1 1 0 1; }
+    #log          { margin: 1 1; border: solid $panel; height: 1fr; }
+    """
 
     def __init__(self, session: Session, app_cfg: dict[str, Any]) -> None:
         super().__init__()
@@ -30,9 +46,13 @@ class ImagingScreen(Screen):
     def compose(self) -> ComposeResult:
         yield Header()
         yield Static("Fase 3 — Imaging disco (ddrescue)", classes="screen-title")
-        yield Static("", id="stats-line")
+        with Vertical(id="stats-box"):
+            yield Label("Recuperati: —", id="stat-rescued")
+            yield Label("Errori:  —", id="stat-errors")
+            yield Label("Velocità: —", id="stat-rate")
+            yield Label("Elapsed: —", id="stat-elapsed")
         yield ProgressBar(total=100, show_eta=False, id="progress")
-        yield RichLog(id="log", highlight=True, markup=True)
+        yield RichLog(id="log", highlight=True, markup=True, wrap=True)
         yield Footer()
 
     def on_mount(self) -> None:
@@ -73,31 +93,31 @@ class ImagingScreen(Screen):
 
     @work(exclusive=True)
     async def _validate_and_start(self, password: str) -> None:
-        log: RichLog = self.query_one("#log")
-        log.write("[dim]Verifica password sudo…[/]")
-
+        log = self.query_one("#log", RichLog)
+        log.write("[dim]Verifica credenziali sudo…[/]")
         ok = await imaging_mod.validate_sudo(password)
         if not ok:
-            log.write("[red]Password errata.[/]")
+            log.write("[red]Password sudo errata.[/]")
             self._ask_password(error="Password errata, riprova.")
             return
-
-        log.write("[green]Autenticazione OK.[/]")
+        log.write("[green]Credenziali OK.[/]")
         self._start_imaging()
 
     @work(exclusive=True)
     async def _start_imaging(self) -> None:
-        log: RichLog = self.query_one("#log")
-        stats: Static = self.query_one("#stats-line")
-        bar: ProgressBar = self.query_one("#progress")
+        log = self.query_one("#log", RichLog)
+        bar = self.query_one("#progress", ProgressBar)
 
-        extra = self._cfg.get("imaging", {}).get("ddrescue_extra_args", "").split()
-        extra = [a for a in extra if a]
+        extra = [a for a in self._cfg.get("imaging", {}).get("ddrescue_extra_args", "").split() if a]
 
-        log.write(f"[cyan]Sorgente:[/] {self._session.device.path}")
-        log.write(f"[cyan]Immagine:[/] {self._session.image_path}")
-        log.write(f"[cyan]Mapfile:[/]  {self._session.map_path}")
-        log.write("[dim]Avvio ddrescue…[/]")
+        log.write("")
+        log.write(f"[cyan]Sorgente :[/] {self._session.device.path}")
+        log.write(f"[cyan]Immagine  :[/] {self._session.image_path}")
+        log.write(f"[cyan]Mapfile   :[/] {self._session.map_path}")
+        if self._total_bytes:
+            log.write(f"[cyan]Dimensione:[/] {_human(self._total_bytes)}")
+        log.write("")
+        log.write("[dim]━━━ Output ddrescue ━━━[/]")
 
         assert self._session.image_path is not None
         assert self._session.map_path is not None
@@ -110,20 +130,40 @@ class ImagingScreen(Screen):
         ):
             if self._aborted:
                 break
-            if prog.line:
-                log.write(prog.line)
 
-            if self._total_bytes > 0:
-                bar.progress = min(100, int(prog.rescued_bytes * 100 / self._total_bytes))
+            # logga solo righe informative (non le 6 righe di status che si ripetono)
+            if prog.info_line:
+                log.write(prog.info_line)
 
-            stats.update(
-                f"Recuperati: [green]{_human(prog.rescued_bytes)}[/]  "
-                f"Errori: [{'red' if prog.errors else 'green'}]{prog.errors}[/]  "
-                f"Velocità: {prog.rate}  Elapsed: {prog.elapsed}"
+            # preferisci pct_rescued calcolata da ddrescue, fallback su bytes/total
+            if prog.pct_rescued > 0:
+                bar.progress = min(100, prog.pct_rescued)
+            elif self._total_bytes > 0:
+                bar.progress = min(100, prog.rescued_bytes * 100 / self._total_bytes)
+
+            rescued_str = _human(prog.rescued_bytes)
+            total_str = f" / {_human(self._total_bytes)}" if self._total_bytes else ""
+            pct_str = f"  ({prog.pct_rescued:.1f}%)" if prog.pct_rescued > 0 else ""
+            self.query_one("#stat-rescued", Label).update(
+                f"Recuperati: [bold]{rescued_str}{total_str}[/]{pct_str}"
+            )
+            self.query_one("#stat-errors", Label).update(
+                f"Errori:     [bold]{prog.errors}[/]"
+                + (f"  ({_human(prog.error_bytes)} non leggibili)" if prog.error_bytes else "")
+            )
+            rate_str = prog.rate or "—"
+            avg_str = prog.avg_rate or "—"
+            rem_str = f"  ETA: {prog.remaining}" if prog.remaining and prog.remaining != "n/a" else ""
+            self.query_one("#stat-rate", Label).update(
+                f"Velocità:   {rate_str}  (media: {avg_str}){rem_str}"
+            )
+            self.query_one("#stat-elapsed", Label).update(
+                f"Elapsed:    {prog.elapsed or '—'}"
             )
 
         if not self._aborted:
-            log.write("[green]Imaging completato.[/]")
+            log.write("")
+            log.write("[bold green]Imaging completato.[/]")
             self._go_next()
 
     def _go_next(self) -> None:
@@ -139,6 +179,6 @@ class ImagingScreen(Screen):
 def _human(n: int) -> str:
     for unit in ("B", "KB", "MB", "GB"):
         if n < 1024:
-            return f"{n:.0f} {unit}"
+            return f"{n:.1f} {unit}"
         n //= 1024
-    return f"{n:.0f} TB"
+    return f"{n:.1f} TB"

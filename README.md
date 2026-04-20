@@ -19,6 +19,12 @@ Utility interattiva TUI per il recupero di file da dispositivi di archiviazione 
 
 ---
 
+## Ambiente di sviluppo e test
+
+Sviluppato e testato su **Ubuntu 25.10**.
+
+---
+
 ## Requisiti
 
 ### Sistema
