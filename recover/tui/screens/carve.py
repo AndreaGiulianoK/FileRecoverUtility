@@ -44,13 +44,33 @@ class CarveScreen(Screen):
         assert self._session.session_dir is not None
         return self._session.session_dir / "raw_photorec"
 
+    def _find_output(self, raw: Path) -> tuple[Path, list[Path]]:
+        """Cerca i file recuperati da photorec.
+
+        photorec crea recup_dir.N/ nell'output dir scelto dall'utente,
+        che può essere raw_photorec/ oppure session_dir/ direttamente.
+        """
+        files = [f for f in raw.rglob("*") if f.is_file()]
+        if files:
+            return raw, files
+
+        # fallback: recup_dir.* creati direttamente in session_dir
+        assert self._session.session_dir is not None
+        all_files: list[Path] = []
+        for d in sorted(self._session.session_dir.glob("recup_dir.*")):
+            all_files.extend(f for f in d.rglob("*") if f.is_file())
+        if all_files:
+            return self._session.session_dir, all_files
+
+        return raw, []
+
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "btn-cancel":
             self.app.pop_screen()
             self.app.pop_screen()
             self.app.pop_screen()
             return
-        if event.button.id != "btn-launch":
+        if event.button.id not in ("btn-launch", "btn-retry"):
             return
         raw = self._raw_dir()
         raw.mkdir(parents=True, exist_ok=True)
@@ -60,12 +80,13 @@ class CarveScreen(Screen):
         with self.app.suspend():
             subprocess.run(["photorec", str(self._session.image_path)])
 
-        files = [f for f in raw.rglob("*") if f.is_file()]
+        raw, files = self._find_output(raw)
         if files:
+            self._session.raw_dir = raw
             self.notify(f"{len(files)} file trovati.", severity="information")
             from recover.tui.screens.organize import OrganizeScreen
             self.app.switch_screen(OrganizeScreen(self._session, self._cfg))
         else:
             self.notify("Nessun file trovato. Verifica la cartella di output in photorec.", severity="warning")
-            self.mount(Button("Riprova photorec", id="btn-launch", variant="warning"))
+            self.mount(Button("Riprova photorec", id="btn-retry", variant="warning"))
             self.mount(Button("Annulla — torna al menu", id="btn-cancel", variant="error"))
