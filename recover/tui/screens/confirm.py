@@ -7,6 +7,7 @@ from textual.screen import Screen
 from textual.widgets import Button, Footer, Header, Label, ListItem, ListView, Static
 
 from recover.utils.fs import BlockDevice, unmount_device
+from recover.core.session import Session
 
 _MODES = [
     ("A", "Recupero file cancellati  (filesystem leggibile)"),
@@ -97,4 +98,18 @@ class ConfirmScreen(Screen):
             self.notify("Smonta il dispositivo prima di procedere.", severity="warning")
             return
         mode = event.item.id.replace("mode_", "") if event.item.id else ""
-        self.notify(f"Modalità {mode} selezionata — prossima fase: IMAGE (non ancora implementata)", severity="information")
+        if not mode:
+            return
+
+        from datetime import datetime
+        from recover.utils import config as cfg_mod
+        cfg = cfg_mod.load()
+
+        session = Session(
+            device=self._dev,
+            mode=mode,
+            timestamp=datetime.now().strftime("%Y-%m-%d_%H%M%S"),
+        )
+
+        from recover.tui.screens.imaging import ImagingScreen
+        self.app.push_screen(ImagingScreen(session, cfg))
