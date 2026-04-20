@@ -42,17 +42,36 @@ def device_size_bytes(dev_path: str) -> int:
         return 0
 
 
+async def validate_sudo(password: str) -> bool:
+    """Valida la password sudo e mette in cache le credenziali.
+
+    Usa 'sudo -S -v': non esegue comandi, aggiorna solo il timestamp sudo.
+    Dopo questa chiamata, sudo non richiederà password per qualche minuto.
+    """
+    proc = await asyncio.create_subprocess_exec(
+        "sudo", "-S", "-v",
+        stdin=asyncio.subprocess.PIPE,
+        stdout=asyncio.subprocess.DEVNULL,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    assert proc.stdin is not None
+    proc.stdin.write((password + "\n").encode())
+    await proc.stdin.drain()
+    proc.stdin.close()
+    await proc.wait()
+    return proc.returncode == 0
+
+
 async def run(
     source: Path,
     image_path: Path,
     map_path: Path,
-    sudo_password: str = "",
     extra_args: list[str] | None = None,
 ) -> AsyncIterator[ImagingProgress]:
+    """Esegue ddrescue. Richiede che sudo sia già autenticato (via validate_sudo)."""
     image_path.parent.mkdir(parents=True, exist_ok=True)
     cmd = [
-        "sudo", "-S",           # -S legge la password da stdin
-        "ddrescue",
+        "sudo", "ddrescue",
         "--force",
         str(source), str(image_path), str(map_path),
     ]
@@ -61,16 +80,10 @@ async def run(
 
     proc = await asyncio.create_subprocess_exec(
         *cmd,
-        stdin=asyncio.subprocess.PIPE,
+        stdin=asyncio.subprocess.DEVNULL,
         stdout=asyncio.subprocess.DEVNULL,
         stderr=asyncio.subprocess.PIPE,
     )
-
-    # invia password + newline, poi chiudi stdin
-    assert proc.stdin is not None
-    proc.stdin.write((sudo_password + "\n").encode())
-    await proc.stdin.drain()
-    proc.stdin.close()
 
     progress = ImagingProgress()
     buf = b""

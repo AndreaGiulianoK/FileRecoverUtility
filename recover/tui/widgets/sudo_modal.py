@@ -3,8 +3,9 @@ from __future__ import annotations
 
 from textual.app import ComposeResult
 from textual.binding import Binding
+from textual.containers import Vertical
 from textual.screen import ModalScreen
-from textual.widgets import Button, Input, Label, Static
+from textual.widgets import Button, Input, Label
 
 
 class SudoPasswordModal(ModalScreen[str]):
@@ -15,7 +16,7 @@ class SudoPasswordModal(ModalScreen[str]):
         align: center middle;
     }
     #dialog {
-        width: 60;
+        width: 58;
         height: auto;
         border: solid $accent;
         background: $surface;
@@ -27,29 +28,44 @@ class SudoPasswordModal(ModalScreen[str]):
     #dialog Input {
         margin-bottom: 1;
     }
-    #buttons {
+    #error-label {
+        color: $error;
+        height: auto;
+        display: none;
+    }
+    #error-label.visible {
+        display: block;
+        margin-bottom: 1;
+    }
+    #btn-row {
         layout: horizontal;
         height: auto;
         align-horizontal: right;
     }
-    #buttons Button {
+    #btn-row Button {
         margin-left: 1;
+        min-width: 10;
     }
     """
 
     BINDINGS = [Binding("escape", "cancel", "Annulla")]
 
+    def __init__(self, error: str = "") -> None:
+        super().__init__()
+        self._error = error
+
     def compose(self) -> ComposeResult:
-        with Static(id="dialog"):
-            yield Label("[bold]Password richiesta[/bold]")
-            yield Static(
-                "ddrescue richiede privilegi per leggere il dispositivo raw.\n"
-                "Inserisci la password sudo:"
+        with Vertical(id="dialog"):
+            yield Label("[bold]Password sudo richiesta[/bold]")
+            yield Label(
+                "ddrescue ha bisogno di privilegi per leggere il dispositivo raw."
             )
+            yield Label(self._error, id="error-label",
+                        classes="visible" if self._error else "")
             yield Input(placeholder="password", password=True, id="pwd")
-            with Static(id="buttons"):
+            with Vertical(id="btn-row"):
                 yield Button("Annulla", id="btn-cancel", variant="default")
-                yield Button("OK", id="btn-ok", variant="primary")
+                yield Button("Conferma", id="btn-ok", variant="primary")
 
     def on_mount(self) -> None:
         self.query_one("#pwd", Input).focus()
@@ -64,8 +80,7 @@ class SudoPasswordModal(ModalScreen[str]):
             self.action_cancel()
 
     def _confirm(self) -> None:
-        pwd = self.query_one("#pwd", Input).value
-        self.dismiss(pwd)
+        self.dismiss(self.query_one("#pwd", Input).value)
 
     def action_cancel(self) -> None:
         self.dismiss("")
