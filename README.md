@@ -113,3 +113,7 @@ Modifica `config.toml` per personalizzare:
 | `python-magic` | Verifica tipo file (magic bytes) |
 | `Pillow` | Thumbnail nel report |
 | `tomli-w` | Scrittura config.toml |
+
+---
+
+Realizzato con [Claude Code](https://claude.ai/code) in Visual Studio Code.
