@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <title>RECOVER — Report {{ session.date }}</title>
+  <style>
+    body { font-family: monospace; background: #1a1a2e; color: #e0e0e0; padding: 2em; }
+    h1 { color: #a29bfe; }
+    h2 { color: #74b9ff; border-bottom: 1px solid #444; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th { background: #2d2d44; color: #a29bfe; padding: .5em 1em; text-align: left; }
+    td { padding: .4em 1em; border-bottom: 1px solid #2d2d44; }
+    .ok    { color: #55efc4; }
+    .warn  { color: #fdcb6e; }
+    .error { color: #ff7675; }
+    .thumb { max-width: 128px; max-height: 128px; }
+    .footer { margin-top: 2em; font-size: .8em; color: #636e72; }
+  </style>
+</head>
+<body>
+  <h1>RECOVER — Report di recupero</h1>
+
+  <h2>Sessione</h2>
+  <table>
+    <tr><th>Dispositivo</th><td>{{ session.device }}</td></tr>
+    <tr><th>Data recupero</th><td>{{ session.date }}</td></tr>
+    <tr><th>Modalità</th><td>{{ session.mode }}</td></tr>
+    <tr><th>SHA-256 immagine</th><td>{{ session.image_sha256 or '—' }}</td></tr>
+  </table>
+
+  <h2>Sommario</h2>
+  <table>
+    <tr><th>Totale file</th><td>{{ stats.total }}</td></tr>
+    <tr><th>Immagini</th><td>{{ stats.images }}</td></tr>
+    <tr><th>Video</th><td>{{ stats.videos }}</td></tr>
+    <tr><th>Altri</th><td>{{ stats.others }}</td></tr>
+    <tr><th>Duplicati</th><td>{{ stats.duplicates }}</td></tr>
+    <tr><th>File senza metadata</th><td>{{ stats.no_meta }}</td></tr>
+    <tr><th>File parziali/corrotti</th><td>{{ stats.corrupted }}</td></tr>
+  </table>
+
+  <h2>File recuperati</h2>
+  <table>
+    <tr>
+      <th>Preview</th><th>Nome</th><th>Tipo</th>
+      <th>Dimensione</th><th>Data originale</th><th>Stato</th>
+    </tr>
+    {% for f in files %}
+    <tr>
+      <td>
+        {% if f.thumbnail %}
+          <img class="thumb" src="{{ f.thumbnail }}" alt="">
+        {% else %}—{% endif %}
+      </td>
+      <td>{{ f.name }}</td>
+      <td>{{ f.mimetype }}</td>
+      <td>{{ f.size }}</td>
+      <td>{{ f.date_original or '—' }}</td>
+      <td class="{{ f.status_class }}">{{ f.status }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+
+  <div class="footer">
+    Generato da RECOVER v{{ version }} — {{ session.date }}
+  </div>
+</body>
+</html>
