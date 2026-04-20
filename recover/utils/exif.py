@@ -23,7 +23,7 @@ def read(path: Path) -> ExifData:
             stderr=subprocess.DEVNULL,
         )
         data = json.loads(out)[0]
-    except (subprocess.CalledProcessError, FileNotFoundError, (json.JSONDecodeError, IndexError)):
+    except (subprocess.CalledProcessError, FileNotFoundError, json.JSONDecodeError, IndexError, ValueError):
         data = {}
 
     return ExifData(

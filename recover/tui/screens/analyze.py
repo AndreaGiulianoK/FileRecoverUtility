@@ -1,75 +1,140 @@
-"""Schermata fase ANALYZE — lancia testdisk interattivo."""
+"""Schermata fase ANALYZE — recupero automatico file con TSK."""
 from __future__ import annotations
 
-import subprocess
-from pathlib import Path
+import asyncio
 from typing import Any
 
+from textual import work
 from textual.app import ComposeResult
 from textual.binding import Binding
+from textual.containers import Horizontal
 from textual.screen import Screen
-from textual.widgets import Button, Footer, Header, Static
+from textual.widgets import Button, Footer, Header, Label, ProgressBar, RichLog, Static, Switch
 
-
-
+from recover.core import analyze as analyze_mod
 from recover.core.session import Session
 
 
 class AnalyzeScreen(Screen):
-    BINDINGS = [Binding("escape", "app.pop_screen", "Indietro")]
+    BINDINGS = [Binding("escape", "abort", "Interrompi", show=True)]
+
+    DEFAULT_CSS = """
+    #instructions { margin: 0 1 1 1; }
+    #options { height: auto; margin: 0 1 1 1; }
+    #options Switch { margin-right: 1; }
+    #progress { margin: 1 1 0 1; }
+    #log { margin: 1 1; border: solid $panel; height: 1fr; }
+    """
 
     def __init__(self, session: Session, app_cfg: dict[str, Any]) -> None:
         super().__init__()
         self._session = session
         self._cfg = app_cfg
+        self._abort = asyncio.Event()
+        self._running = False
 
     def compose(self) -> ComposeResult:
         yield Header()
-        yield Static("Fase 5A — Recupero file cancellati (testdisk)", classes="screen-title")
+        yield Static("Fase 5A — Recupero file (TSK)", classes="screen-title")
         yield Static(
-            "testdisk è un programma interattivo.\n"
-            "Premi [bold]Avvia testdisk[/bold]: il terminale passerà a testdisk.\n\n"
-            f"[dim]Immagine:[/dim] {self._session.image_path}\n\n"
-            "In testdisk:\n"
-            "  1. Seleziona la partizione\n"
-            "  2. Scegli [bold]Advanced → Undelete[/bold]\n"
-            "  3. Copia i file recuperati nella cartella:\n"
-            f"     [green]{self._raw_dir()}[/green]\n"
-            "  4. Esci da testdisk (Q)\n\n"
-            "Dopo aver chiuso testdisk, l'utility riprenderà automaticamente.",
+            f"[dim]Immagine:[/dim] {self._session.image_path}\n"
+            "Recupero automatico: i file cancellati vengono estratti con nome e "
+            "struttura cartelle originali.",
             id="instructions",
         )
-        yield Button("Avvia testdisk", id="btn-launch", variant="primary")
+        with Horizontal(id="options"):
+            yield Switch(value=True, id="sw-all", animate=False)
+            yield Label("Includi anche i file non cancellati (attivo di default)")
+        yield Button("Avvia recupero", id="btn-launch", variant="primary")
+        yield ProgressBar(total=100, show_eta=False, id="progress")
+        yield RichLog(id="log", highlight=True, markup=True, wrap=True)
         yield Footer()
 
-    def _raw_dir(self) -> Path:
-        assert self._session.session_dir is not None
-        return self._session.session_dir / "raw_testdisk"
+    def on_mount(self) -> None:
+        self.query_one("#progress", ProgressBar).display = False
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id == "btn-cancel":
-            self.app.pop_screen()
-            self.app.pop_screen()
-            self.app.pop_screen()
-            return
-        if event.button.id not in ("btn-launch", "btn-retry"):
-            return
-        raw = self._raw_dir()
-        raw.mkdir(parents=True, exist_ok=True)
-        self._session.raw_dir = raw
+        match event.button.id:
+            case "btn-launch":
+                self.query_one("#btn-launch", Button).disabled = True
+                self.query_one("#sw-all", Switch).disabled = True
+                self.query_one("#progress", ProgressBar).display = True
+                self._run_recovery()
+            case "btn-back":
+                self.app.pop_screen()
 
-        assert self._session.image_path is not None
-        with self.app.suspend():
-            subprocess.run(["testdisk", str(self._session.image_path)])
+    @work(exclusive=True)
+    async def _run_recovery(self) -> None:
+        log = self.query_one("#log", RichLog)
+        bar = self.query_one("#progress", ProgressBar)
+        include_all = self.query_one("#sw-all", Switch).value
 
-        # dopo il ritorno, verifica se ci sono file recuperati
-        files = list(raw.rglob("*"))
-        recovered = [f for f in files if f.is_file()]
+        missing = analyze_mod.check_tools()
+        if missing:
+            log.write(f"[red]Strumenti TSK mancanti: {', '.join(missing)}[/]")
+            log.write("[yellow]Installa con: sudo apt install sleuthkit[/]")
+            self.mount(Button("Torna indietro", id="btn-back", variant="error"))
+            return
+
+        raw_dir = self._session.session_dir / "raw_tsk"
+        raw_dir.mkdir(parents=True, exist_ok=True)
+        self._session.raw_dir = raw_dir
+        self._running = True
+
+        log.write("[dim]Scansione filesystem con fls…[/]")
+
+        prog = analyze_mod.AnalyzeProgress()
+        async for prog in analyze_mod.run(
+            self._session.image_path,
+            raw_dir,
+            include_all=include_all,
+            abort=self._abort,
+        ):
+            if prog.finished:
+                break
+            if prog.done == 0:
+                if prog.total == 0:
+                    log.write("[yellow]Nessun file trovato nel filesystem.[/]")
+                    break
+                kind = "file (cancellati + esistenti)" if include_all else "file cancellati"
+                log.write(f"[cyan]Trovati [bold]{prog.total}[/bold] {kind}.[/]")
+            else:
+                bar.progress = prog.done * 100 / prog.total
+                if prog.done % 100 == 0 or prog.done == prog.total:
+                    fail_str = f"  ({prog.failed} falliti)" if prog.failed else ""
+                    log.write(f"[dim]{prog.done}/{prog.total}[/]{fail_str}")
+
+        self._running = False
+
+        if self._abort.is_set():
+            log.write("[yellow]Recupero interrotto dall'utente.[/]")
+            return
+
+        bar.progress = 100
+        recovered = [f for f in raw_dir.rglob("*") if f.is_file()]
+        log.write("")
         if recovered:
-            self.notify(f"{len(recovered)} file trovati.", severity="information")
+            log.write(f"[bold green]Estratti {len(recovered)} file.[/]")
+            if prog.failed:
+                log.write(
+                    f"[yellow]{prog.failed} file non recuperabili "
+                    "(settori danneggiati o sovritti).[/]"
+                )
             from recover.tui.screens.organize import OrganizeScreen
             self.app.switch_screen(OrganizeScreen(self._session, self._cfg))
         else:
-            self.notify("Nessun file trovato nella cartella raw.", severity="warning")
-            self.mount(Button("Riprova testdisk", id="btn-retry", variant="warning"))
-            self.mount(Button("Annulla — torna al menu", id="btn-cancel", variant="error"))
+            log.write(
+                "[red]Nessun file recuperato.[/]\n"
+                "Il filesystem potrebbe essere corrotto: prova la [bold]modalità B[/bold] (photorec)."
+            )
+            self.mount(Button("Torna indietro", id="btn-back", variant="error"))
+
+    def action_abort(self) -> None:
+        if not self._running:
+            self.app.pop_screen()
+            return
+        self._abort.set()
+        self.notify("Recupero interrotto…", severity="warning")
+
+    def on_unmount(self) -> None:
+        self._abort.set()

@@ -10,12 +10,13 @@ from textual.widgets import Button, Static
 
 MODES = {
     "A": {
-        "label": "A — Recupero file cancellati",
-        "tool": "testdisk",
+        "label": "A — Recupero file cancellati (automatico)",
+        "tool": "tsk (fls + icat)",
         "when": "Il filesystem è ancora leggibile (card formattata accidentalmente, file eliminati)",
-        "how": "Legge la struttura del filesystem per trovare i file cancellati. "
-               "I file vengono recuperati con il nome originale.",
-        "pro": "Nomi originali, struttura cartelle, selezione selettiva dei file",
+        "how": "Scansiona il filesystem con The Sleuth Kit (fls + icat). "
+               "Estrae automaticamente i file cancellati mantenendo nome e struttura cartelle. "
+               "Opzionalmente copia anche i file esistenti non cancellati.",
+        "pro": "Completamente automatico, nomi originali, struttura cartelle preservata",
         "con": "Non funziona se il filesystem è corrotto o la card è fisicamente danneggiata",
         "variant": "primary",
     },

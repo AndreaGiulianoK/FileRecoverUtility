@@ -90,13 +90,13 @@ class VerifyScreen(Screen):
             self.query_one("#nav-hint", Static).update("[green]Modalità C — imaging completato.[/green]")
             self.mount(Button("Fine", id="btn-done", variant="success"))
         elif mode == "A":
-            self.mount(Button("Avvia testdisk", id="btn-analyze", variant="primary"))
+            self.mount(Button("Avvia recupero file (TSK)", id="btn-analyze", variant="primary"))
             if not fs_ok:
                 self.mount(Button("Usa photorec invece", id="btn-carve", variant="warning"))
         else:
             self.mount(Button("Avvia photorec", id="btn-carve", variant="primary"))
             if fs_ok:
-                self.mount(Button("Usa testdisk invece", id="btn-analyze", variant="default"))
+                self.mount(Button("Usa recupero file (TSK) invece", id="btn-analyze", variant="default"))
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         match event.button.id:

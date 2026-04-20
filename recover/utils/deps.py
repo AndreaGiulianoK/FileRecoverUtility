@@ -7,10 +7,11 @@ from dataclasses import dataclass, field
 REQUIRED_TOOLS: dict[str, str] = {
     "ddrescue": "sudo apt install gddrescue",
     "photorec": "sudo apt install testdisk",
-    "testdisk": "sudo apt install testdisk",
+    "fls":      "sudo apt install sleuthkit",
+    "icat":     "sudo apt install sleuthkit",
     "exiftool": "sudo apt install libimage-exiftool-perl",
-    "fsck": "sudo apt install e2fsprogs",
-    "file": "sudo apt install file",
+    "fsck":     "sudo apt install e2fsprogs",
+    "file":     "sudo apt install file",
 }
 
 

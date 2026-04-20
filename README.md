@@ -1,4 +1,4 @@
-# RECOVER
+# RECOVER v1.0
 
 Utility interattiva TUI per il recupero di file da dispositivi di archiviazione esterni, principalmente SD card.
 
@@ -8,7 +8,7 @@ Utility interattiva TUI per il recupero di file da dispositivi di archiviazione 
 
 - Rileva automaticamente i dispositivi rimovibili collegati
 - Crea un'immagine disco sicura con **ddrescue** (lavora sempre sulla copia, mai sul dispositivo originale)
-- Recupera file cancellati da filesystem intatto con **testdisk**
+- Recupera file cancellati da filesystem intatto con **The Sleuth Kit** (fls + icat) — automatico, mantiene nomi e struttura cartelle
 - Recupera file da filesystem corrotto o SD danneggiata con **photorec** (file carving raw)
 - Organizza i file recuperati rinominandoli con i metadata EXIF (`2023-08-15_14-32-07_Canon_EOS_R5.jpg`)
 - Deduplica i file via SHA-256
@@ -30,8 +30,16 @@ Sviluppato e testato su **Ubuntu 25.10**.
 ### Sistema
 
 ```bash
-sudo apt install gddrescue testdisk libimage-exiftool-perl libmagic1
+sudo apt install gddrescue sleuthkit photorec libimage-exiftool-perl libmagic1
 ```
+
+| Pacchetto | Uso |
+|---|---|
+| `gddrescue` | Imaging disco (ddrescue) |
+| `sleuthkit` | Recupero file cancellati (fls + icat) — modalità A |
+| `photorec` | File carving da filesystem corrotto — modalità B |
+| `libimage-exiftool-perl` | Lettura metadata EXIF |
+| `libmagic1` | Identificazione tipo file |
 
 ### Python
 
@@ -70,7 +78,7 @@ All'avvio si presenta un menu interattivo navigabile da tastiera:
 1. **Nuovo recupero** — rileva i dispositivi rimovibili collegati
 2. Seleziona la SD card o inserisci il path di un'immagine `.img` esistente
 3. Scegli la modalità:
-   - **A** — file cancellati (filesystem ancora leggibile)
+   - **A** — file cancellati (filesystem ancora leggibile) — automatico con TSK
    - **B** — filesystem corrotto o SD danneggiata (carving raw)
    - **C** — solo imaging (crea `.img` e ferma)
 4. L'utility crea l'immagine disco, analizza e recupera i file

@@ -8,7 +8,7 @@ from jinja2 import Environment, FileSystemLoader
 from recover.core.session import RecoveredFile, Session
 
 _TEMPLATE_DIR = Path(__file__).parent.parent / "templates"
-_VERSION = "0.1"
+_VERSION = "1.0"
 
 
 def _human(n: int) -> str:
@@ -60,7 +60,7 @@ def generate(session: Session) -> Path:
         session={
             "device": f"{session.device.path} ({session.device.label or session.device.name})",
             "date": session.timestamp,
-            "mode": {"A": "Recupero file cancellati (testdisk)",
+            "mode": {"A": "Recupero file cancellati (TSK — fls + icat)",
                      "B": "Recupero filesystem corrotto (photorec)",
                      "C": "Solo imaging (ddrescue)"}.get(session.mode, session.mode),
             "image_sha256": session.image_sha256 or "—",
