@@ -122,6 +122,7 @@ class ImagingScreen(Screen):
         assert self._session.image_path is not None
         assert self._session.map_path is not None
 
+        last_info = ""
         async for prog in imaging_mod.run(
             Path(self._session.device.path),
             self._session.image_path,
@@ -131,9 +132,10 @@ class ImagingScreen(Screen):
             if self._aborted:
                 break
 
-            # logga solo righe informative (non le 6 righe di status che si ripetono)
-            if prog.info_line:
+            # logga solo righe informative non duplicate
+            if prog.info_line and prog.info_line != last_info:
                 log.write(prog.info_line)
+                last_info = prog.info_line
 
             # preferisci pct_rescued calcolata da ddrescue, fallback su bytes/total
             if prog.pct_rescued > 0:

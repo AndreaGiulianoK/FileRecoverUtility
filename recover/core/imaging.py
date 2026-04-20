@@ -148,9 +148,10 @@ async def run(
 
 
 def _parse_into(line: str, p: ImagingProgress) -> None:
-    m = re.search(r"rescued:\s*([\d.]+)\s*(\w+)", line, re.I)
+    # lookbehind negativo: non matchare "pct rescued:" né "non-rescued:"
+    m = re.search(r"(?<!\w)rescued:\s*([\d.,]+)\s*(B|kB|MB|GB|TB)\b", line, re.I)
     if m:
-        p.rescued_bytes = _to_bytes(m.group(1), m.group(2))
+        p.rescued_bytes = _to_bytes(m.group(1).replace(",", "."), m.group(2))
 
     m = re.search(r"errsize:\s*([\d.]+)\s*(\w+)", line, re.I)
     if m:
