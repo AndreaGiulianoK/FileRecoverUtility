@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 from textual import work
 from textual.app import ComposeResult
@@ -166,10 +166,62 @@ class ImagingScreen(Screen):
             )
 
         self._imaging_running = False
-        if not self._aborted:
+        if self._aborted:
+            return
+
+        rc = prog.returncode  # return code dell'ultimo yield
+
+        if rc == 0:
             log.write("")
-            log.write("[bold green]Imaging completato.[/]")
+            log.write("[bold green]Imaging completato senza errori.[/]")
             self._go_next()
+        else:
+            self._handle_failure(prog, rc)
+
+    def _handle_failure(self, prog: Any, rc: int | None) -> None:
+        from textual.widgets import Button
+        log = self.query_one("#log", RichLog)
+        log.write("")
+
+        has_partial = prog.rescued_bytes > 0
+        pct_str = f"{prog.pct_rescued:.1f}%" if prog.pct_rescued > 0 else "?"
+        rescued_str = _human(prog.rescued_bytes)
+
+        if has_partial:
+            log.write(
+                f"[yellow]ddrescue terminato con errori (exit {rc}).[/]\n"
+                f"Recuperati: [green]{rescued_str}[/] ({pct_str}) prima dell'interruzione.\n\n"
+                "[bold]Cosa è successo:[/bold]\n"
+                "  • I settori non leggibili sono stati riempiti con zeri nell'immagine\n"
+                "  • Il mapfile registra esattamente quali zone sono buone e quali no\n"
+                "  • L'immagine parziale è [green]utilizzabile[/green]: photorec e testdisk\n"
+                "    lavorano normalmente saltando i blocchi zeroed\n"
+                "  • I file che cadono interamente su settori leggibili saranno recuperati integri\n"
+                "  • I file che attraversano settori corrotti saranno parziali o assenti\n\n"
+                "[bold]Puoi:[/bold]"
+            )
+            self.mount(Button(
+                "Continua con l'immagine parziale", id="btn-partial", variant="warning"
+            ))
+            if self._session.map_path and self._session.map_path.exists():
+                log.write(
+                    "  • Riprovare l'imaging in futuro (il mapfile permette di riprendere\n"
+                    "    da dove si è fermato): usa [bold]Riprendi sessione[/bold] dal menu principale"
+                )
+        else:
+            log.write(
+                f"[red]ddrescue terminato con errori (exit {rc}) senza recuperare dati.[/]\n"
+                "Il dispositivo potrebbe essere completamente inaccessibile.\n"
+                "Verifica il collegamento fisico e riprova."
+            )
+            self.mount(Button("Torna indietro", id="btn-back", variant="error"))
+
+    def on_button_pressed(self, event: Any) -> None:
+        match event.button.id:
+            case "btn-partial":
+                self._go_next()
+            case "btn-back":
+                self.app.pop_screen()
 
     def _go_next(self) -> None:
         from recover.tui.screens.verify import VerifyScreen

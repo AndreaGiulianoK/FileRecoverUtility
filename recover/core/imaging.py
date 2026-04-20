@@ -20,6 +20,7 @@ class ImagingProgress:
     pct_rescued: float = 0.0
     remaining: str = ""
     info_line: str = ""   # riga informativa da loggare (vuota se è solo status)
+    returncode: int | None = None   # impostato solo nell'ultimo yield
 
 
 _SI = {"b": 1, "kb": 1_000, "mb": 1_000_000, "gb": 1_000_000_000, "tb": 1_000_000_000_000}
@@ -164,6 +165,18 @@ async def run(
             yield progress
 
     await proc.wait()
+    progress = ImagingProgress(
+        rescued_bytes=progress.rescued_bytes,
+        error_bytes=progress.error_bytes,
+        errors=progress.errors,
+        rate=progress.rate,
+        avg_rate=progress.avg_rate,
+        elapsed=progress.elapsed,
+        pct_rescued=progress.pct_rescued,
+        remaining=progress.remaining,
+        info_line="",
+        returncode=proc.returncode,
+    )
     yield progress
 
 
