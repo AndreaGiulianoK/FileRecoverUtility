@@ -31,9 +31,10 @@ def _to_bytes(value: str, unit: str) -> int:
 
 
 def device_size_bytes(dev_path: str) -> int:
+    """Dimensione in byte via lsblk (non richiede sudo)."""
     try:
         out = subprocess.check_output(
-            ["sudo", "blockdev", "--getsize64", dev_path],
+            ["lsblk", "-b", "-dn", "-o", "SIZE", dev_path],
             text=True, stderr=subprocess.DEVNULL,
         )
         return int(out.strip())
@@ -45,11 +46,13 @@ async def run(
     source: Path,
     image_path: Path,
     map_path: Path,
+    sudo_password: str = "",
     extra_args: list[str] | None = None,
 ) -> AsyncIterator[ImagingProgress]:
     image_path.parent.mkdir(parents=True, exist_ok=True)
     cmd = [
-        "sudo", "ddrescue",
+        "sudo", "-S",           # -S legge la password da stdin
+        "ddrescue",
         "--force",
         str(source), str(image_path), str(map_path),
     ]
@@ -58,9 +61,16 @@ async def run(
 
     proc = await asyncio.create_subprocess_exec(
         *cmd,
+        stdin=asyncio.subprocess.PIPE,
         stdout=asyncio.subprocess.DEVNULL,
         stderr=asyncio.subprocess.PIPE,
     )
+
+    # invia password + newline, poi chiudi stdin
+    assert proc.stdin is not None
+    proc.stdin.write((sudo_password + "\n").encode())
+    await proc.stdin.drain()
+    proc.stdin.close()
 
     progress = ImagingProgress()
     buf = b""

@@ -36,7 +36,8 @@ class ImagingScreen(Screen):
 
     def on_mount(self) -> None:
         self._prepare_paths()
-        self._start_imaging()
+        from recover.tui.widgets.sudo_modal import SudoPasswordModal
+        self.app.push_screen(SudoPasswordModal(), self._on_password)
 
     def _prepare_paths(self) -> None:
         ts = datetime.now().strftime("%Y-%m-%d_%H%M%S")
@@ -60,6 +61,14 @@ class ImagingScreen(Screen):
         total_bytes = imaging_mod.device_size_bytes(dev.path)
         self._total_bytes = total_bytes
 
+    def _on_password(self, password: str) -> None:
+        if not password:
+            self.notify("Password non inserita — imaging annullato.", severity="warning")
+            self.app.pop_screen()
+            return
+        self._sudo_password = password
+        self._start_imaging()
+
     @work(exclusive=True)
     async def _start_imaging(self) -> None:
         log: RichLog = self.query_one("#log")
@@ -77,15 +86,19 @@ class ImagingScreen(Screen):
         assert self._session.image_path is not None
         assert self._session.map_path is not None
 
+        auth_failed = False
         async for prog in imaging_mod.run(
             Path(self._session.device.path),
             self._session.image_path,
             self._session.map_path,
-            extra,
+            sudo_password=getattr(self, "_sudo_password", ""),
+            extra_args=extra,
         ):
             if self._aborted:
                 break
             if prog.line:
+                if "incorrect password" in prog.line.lower() or "authentication failure" in prog.line.lower():
+                    auth_failed = True
                 log.write(prog.line)
 
             pct = 0
@@ -99,7 +112,12 @@ class ImagingScreen(Screen):
                 f"Velocità: {prog.rate}  Elapsed: {prog.elapsed}"
             )
 
-        if not self._aborted:
+        if auth_failed:
+            log.write("[red]Autenticazione sudo fallita. Riprova con la password corretta.[/]")
+            self.notify("Password sudo errata.", severity="error")
+            from recover.tui.widgets.sudo_modal import SudoPasswordModal
+            self.app.push_screen(SudoPasswordModal(), self._on_password)
+        elif not self._aborted:
             log.write("[green]Imaging completato.[/]")
             self._go_next()
 
